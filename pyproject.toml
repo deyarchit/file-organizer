@@ -1,0 +1,11 @@
+[project]
+name = "folder-organizer"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "litellm>=1.73.6",
+    "pydantic>=2.11.7",
+    "pytest>=8.4.1",
+]
