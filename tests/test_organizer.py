@@ -7,12 +7,10 @@ from organizer.disk_operations import (
     FlatFileItem,
 )
 import os
-from typing import List
-import shutil
 
 
 # Helper function to create dummy files for testing
-def create_dummy_file(filepath: str, content: str):
+def create_dummy_file(filepath: str, content: str) -> None:
     """Creates a dummy file with specified content."""
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     with open(filepath, "w") as f:
@@ -158,6 +156,8 @@ def test_apply_changes_integration(tmp_path):
     os.makedirs(root_dir / "nested_empty" / "nested_empty" / "nested_empty")
     current_items = create_json_from_dir(str(root_dir))
     move_hash = _calculate_md5(str(root_dir / "a" / "move_me.txt"))
+
+    assert current_items is not None
 
     # --- Desired state ---
     # Note: apply_changes cannot create new file content, only move existing files.

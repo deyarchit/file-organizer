@@ -1,5 +1,5 @@
 from litellm import completion
-from typing import Literal, Optional, List, Any, Dict
+from typing import List
 from organizer.disk_operations import (
     create_json_from_dir,
     compare_structures,
@@ -14,7 +14,7 @@ load_dotenv()
 # gemini_key = os.getenv("GEMINI_API_KEY")
 
 
-def organize(path: str):
+def organize(path: str) -> None:
     dir_json: List[FlatFileItem] | None = create_json_from_dir(path)
     if dir_json:
         print(f"Loaded dir_json: {dir_json}")

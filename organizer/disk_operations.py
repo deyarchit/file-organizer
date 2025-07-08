@@ -1,7 +1,6 @@
 import os
 import shutil
-import hashlib
-from typing import Dict, Any, List, Optional, Tuple, Set
+from typing import List, Optional, Tuple
 from .models import FlatFileItem
 from .utils import _calculate_md5
 
@@ -82,10 +81,10 @@ def compare_structures(
 
 
 def apply_changes(
-    current_items: List,  # FlatFileItem
-    desired_items: List,  # FlatFileItem
+    current_items: List[FlatFileItem],
+    desired_items: List[FlatFileItem],
     root_dir: str,
-):
+) -> None:
     """
     Applies filesystem changes to match the desired structure, including the removal
     of nested empty directories.
