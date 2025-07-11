@@ -78,6 +78,9 @@ def test_compare_structures_no_changes():
     assert added == []
 
 
+# ---
+
+
 def test_compare_structures_with_changes():
     """Test comparison with added and missing files."""
     current = [
@@ -88,18 +91,31 @@ def test_compare_structures_with_changes():
         FlatFileItem(path="file2.txt", hash="h2", size=20),
         FlatFileItem(path="dir1/"),
     ]
+
+    expected_missing = [FlatFileItem(path="file1.txt", hash="h1", size=10)]
+    expected_added = [FlatFileItem(path="file2.txt", hash="h2", size=20)]
+
     missing, added = compare_structures(current, desired)
-    assert missing == ["file1.txt"]
-    assert added == ["file2.txt"]
+
+    assert missing == expected_missing
+    assert added == expected_added
+
+
+# ---
 
 
 def test_compare_same_filename_different_hash():
     """Test files with the same name but different hashes are detected as changes."""
     current = [FlatFileItem(path="file.txt", hash="h1", size=10)]
     desired = [FlatFileItem(path="file.txt", hash="h2", size=10)]
+
     missing, added = compare_structures(current, desired)
-    assert missing == ["file.txt"]
-    assert added == ["file.txt"]
+
+    assert missing == current
+    assert added == desired
+
+
+# ---
 
 
 def test_compare_files_only_mode():
@@ -113,9 +129,17 @@ def test_compare_files_only_mode():
         FlatFileItem(path="x/file.txt", hash="h1", size=10),  # Same name & hash
         FlatFileItem(path="y/new.txt", hash="h_new", size=10),
     ]
+
+    expected_missing = [FlatFileItem(path="b/stale.txt", hash="h_stale", size=10)]
+    expected_added = [FlatFileItem(path="y/new.txt", hash="h_new", size=10)]
+
     missing, added = compare_structures(current, desired, files_only=True)
-    assert missing == ["stale.txt"]
-    assert added == ["new.txt"]
+
+    assert missing == expected_missing
+    assert added == expected_added
+
+
+# ---
 
 
 def test_compare_multiple_files_same_name_different_hash():
@@ -130,15 +154,20 @@ def test_compare_multiple_files_same_name_different_hash():
         # This is a new file
         FlatFileItem(path="d/file.txt", hash="h3", size=30),
     ]
+
     missing, added = compare_structures(current, desired)
 
-    # ✅ **FIXED ASSERTION**
     # The comparison is on `path::hash`. Since no exact match exists for
     # the items in `current` within `desired`, both are considered missing.
-    assert sorted(missing) == sorted(["a/file.txt", "b/file.txt"])
+    # We sort the lists to ensure the comparison is order-independent.
+    assert sorted(missing, key=lambda item: item.path) == sorted(
+        current, key=lambda item: item.path
+    )
 
     # Conversely, the items in `desired` are not in `current` and are considered added.
-    assert sorted(added) == sorted(["c/file.txt", "d/file.txt"])
+    assert sorted(added, key=lambda item: item.path) == sorted(
+        desired, key=lambda item: item.path
+    )
 
 
 # --- Tests for apply_changes ---

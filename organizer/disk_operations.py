@@ -41,9 +41,9 @@ def compare_structures(
     current_items: List[FlatFileItem],
     desired_items: List[FlatFileItem],
     files_only: bool = False,
-) -> Tuple[List[str], List[str]]:
+) -> Tuple[List[FlatFileItem], List[FlatFileItem]]:
     """
-    Compares file system items and returns missing and added paths.
+    Compares file system items and returns missing and added items.
 
     Args:
         current_items: List of FlatFileItem from current state.
@@ -51,8 +51,8 @@ def compare_structures(
         files_only: If True, only compare file name and hash (ignore directories and paths).
 
     Returns:
-        missing (List[str]): Paths in current but not in desired.
-        added (List[str]): Paths in desired but not in current.
+        missing (List[FlatFileItem]): Items in current but not in desired.
+        added (List[FlatFileItem]): Items in desired but not in current.
     """
 
     def item_key(item: FlatFileItem) -> str:
@@ -63,19 +63,25 @@ def compare_structures(
             return item.path
         return f"{item.path}::{item.hash}"
 
-    current_keys = {
-        item_key(item)
+    current_map = {
+        item_key(item): item
         for item in current_items
         if not files_only or not item.path.endswith("/")
     }
-    desired_keys = {
-        item_key(item)
+    desired_map = {
+        item_key(item): item
         for item in desired_items
         if not files_only or not item.path.endswith("/")
     }
 
-    missing = sorted([k.split("::")[0] for k in (current_keys - desired_keys)])
-    added = sorted([k.split("::")[0] for k in (desired_keys - current_keys)])
+    current_keys = set(current_map.keys())
+    desired_keys = set(desired_map.keys())
+
+    missing_keys = current_keys - desired_keys
+    added_keys = desired_keys - current_keys
+
+    missing = sorted([current_map[k] for k in missing_keys], key=lambda x: x.path)
+    added = sorted([desired_map[k] for k in added_keys], key=lambda x: x.path)
 
     return missing, added
 
@@ -93,42 +99,37 @@ def apply_changes(
         print(f"Error: Root directory '{root_dir}' does not exist.")
         return
 
-    current_map = {item.path: item for item in current_items}
-    desired_map = {item.path: item for item in desired_items}
-
-    missing_paths, added_paths = compare_structures(current_items, desired_items)
+    missing_items, added_items = compare_structures(current_items, desired_items)
 
     handled_paths = set()
 
-    # Step 1: Create directories (no changes)
-    for path in added_paths:
-        if path.endswith("/"):
-            full_path = os.path.join(root_dir, path.replace("/", os.sep))
+    # Step 1: Create directories
+    for item in added_items:
+        if item.path.endswith("/"):
+            full_path = os.path.join(root_dir, item.path.replace("/", os.sep))
             if not os.path.exists(full_path):
                 print(f"Creating directory: {full_path}")
                 os.makedirs(full_path, exist_ok=True)
-            handled_paths.add(path)
+            handled_paths.add(item.path)
 
-    # Step 2: Move files by hash (no changes)
+    # Step 2: Move files by hash
     missing_files_by_hash = {
         item.hash: item
-        for path, item in current_map.items()
-        if path in missing_paths and not path.endswith("/") and item.hash
+        for item in missing_items
+        if not item.path.endswith("/") and item.hash
     }
     added_files_by_hash = {
         item.hash: item
-        for path, item in desired_map.items()
-        if path in added_paths and not path.endswith("/") and item.hash
+        for item in added_items
+        if not item.path.endswith("/") and item.hash
     }
 
     for file_hash, old_item in missing_files_by_hash.items():
         if file_hash in added_files_by_hash:
             new_item = added_files_by_hash[file_hash]
-            old_rel_path = old_item.path
-            new_rel_path = new_item.path
 
-            full_old_path = os.path.join(root_dir, old_rel_path.replace("/", os.sep))
-            full_new_path = os.path.join(root_dir, new_rel_path.replace("/", os.sep))
+            full_old_path = os.path.join(root_dir, old_item.path.replace("/", os.sep))
+            full_new_path = os.path.join(root_dir, new_item.path.replace("/", os.sep))
             dest_dir = os.path.dirname(full_new_path)
 
             if not os.path.exists(dest_dir):
@@ -139,24 +140,24 @@ def apply_changes(
             )
             shutil.move(full_old_path, full_new_path)
 
-            handled_paths.add(old_rel_path)
-            handled_paths.add(new_rel_path)
+            handled_paths.add(old_item.path)
+            handled_paths.add(new_item.path)
 
-    # Step 3: Delete remaining missing files (no changes)
-    for path in missing_paths:
-        if path in handled_paths or path.endswith("/"):
+    # Step 3: Delete remaining missing files
+    for item in missing_items:
+        if item.path in handled_paths or item.path.endswith("/"):
             continue
-        full_path = os.path.join(root_dir, path.replace("/", os.sep))
+        full_path = os.path.join(root_dir, item.path.replace("/", os.sep))
         if os.path.exists(full_path):
             print(f"Removing file: {full_path}")
             os.remove(full_path)
-            handled_paths.add(path)
+            handled_paths.add(item.path)
 
     # Step 4: Delete empty directories (bottom-up)
-    # This logic now correctly handles nested empty directories.
     dirs_to_check = set()
-    for path in missing_paths:
+    for item in missing_items:
         # Start with the directory itself if it's a dir, or the file's parent dir.
+        path = item.path
         current_dir = path.strip("/") if path.endswith("/") else os.path.dirname(path)
 
         # Walk up the tree, adding each parent to the set of candidates for removal.
