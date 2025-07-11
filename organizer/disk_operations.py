@@ -87,128 +87,104 @@ def compare_structures(
 
 
 def apply_changes(
-    current_items: List[FlatFileItem],
-    desired_items: List[FlatFileItem],
-    root_dir: str,
+    current_items: List[FlatFileItem], desired_items: List[FlatFileItem], root_dir: str
 ) -> None:
-    """
-    Applies filesystem changes to match the desired structure, ensuring all
-    operations are securely within the root_dir.
-    """
+    """Apply changes to the filesystem to match desired structure."""
     if not os.path.isdir(root_dir):
-        print(f"Error: Root directory '{root_dir}' does not exist.")
+        print(f"❌ Root directory '{root_dir}' does not exist.")
         return
 
-    # Get the real, absolute path of the root directory for security checks
-    real_root_dir = os.path.realpath(root_dir)
-
+    real_root = os.path.realpath(root_dir)
     missing_items, added_items = compare_structures(current_items, desired_items)
+    handled: Set[str] = set()
 
-    handled_paths = set()
+    _create_directories(added_items, root_dir, handled)
+    _move_files_by_hash(missing_items, added_items, root_dir, real_root, handled)
+    _delete_missing_files(missing_items, root_dir, real_root, handled)
+    _delete_empty_dirs(missing_items, root_dir, real_root)
 
-    # Step 1: Create directories
+
+def _create_directories(
+    added_items: List[FlatFileItem], root_dir: str, handled: Set[str]
+) -> None:
     for item in added_items:
         if item.path.endswith("/"):
             full_path = os.path.join(root_dir, item.path.replace("/", os.sep))
             if not os.path.exists(full_path):
-                print(f"Creating directory: {full_path}")
+                print(f"📁 Creating directory: {full_path}")
                 os.makedirs(full_path, exist_ok=True)
-            handled_paths.add(item.path)
+            handled.add(item.path)
 
-    # Step 2: Move files by hash
-    missing_files_by_hash = {
-        item.hash: item
-        for item in missing_items
-        if not item.path.endswith("/") and item.hash
-    }
-    added_files_by_hash = {
-        item.hash: item
-        for item in added_items
-        if not item.path.endswith("/") and item.hash
-    }
 
-    for file_hash, old_item in missing_files_by_hash.items():
-        if file_hash in added_files_by_hash:
-            new_item = added_files_by_hash[file_hash]
+def _move_files_by_hash(
+    missing: List[FlatFileItem],
+    added: List[FlatFileItem],
+    root: str,
+    real_root: str,
+    handled: Set[str],
+) -> None:
+    src_by_hash = {i.hash: i for i in missing if not i.path.endswith("/") and i.hash}
+    dst_by_hash = {i.hash: i for i in added if not i.path.endswith("/") and i.hash}
 
-            full_old_path = os.path.join(root_dir, old_item.path.replace("/", os.sep))
-            full_new_path = os.path.join(root_dir, new_item.path.replace("/", os.sep))
-
-            # Ensure both source and destination are within the root directory
-            real_old_path = os.path.realpath(full_old_path)
-            real_new_path = os.path.realpath(full_new_path)
-
-            if not real_old_path.startswith(
-                real_root_dir
-            ) or not real_new_path.startswith(real_root_dir):
-                print(
-                    f"Skipping move from '{old_item.path}' to '{new_item.path}' as it's outside the target directory."
-                )
-                continue
-
-            dest_dir = os.path.dirname(full_new_path)
-            if not os.path.exists(dest_dir):
-                os.makedirs(dest_dir, exist_ok=True)
-
-            print(
-                f"Moving file (matched by hash): '{full_old_path}' -> '{full_new_path}'"
-            )
-            shutil.move(full_old_path, full_new_path)
-
-            handled_paths.add(old_item.path)
-            handled_paths.add(new_item.path)
-
-    # Step 3: Delete remaining missing files
-    for item in missing_items:
-        if item.path in handled_paths or item.path.endswith("/"):
+    for file_hash, old in src_by_hash.items():
+        if file_hash not in dst_by_hash:
             continue
 
-        full_path = os.path.join(root_dir, item.path.replace("/", os.sep))
-
-        # Ensure the path to be deleted is within the root directory
-        if not os.path.realpath(full_path).startswith(real_root_dir):
-            print(
-                f"Skipping deletion of '{item.path}' because it is outside the target directory."
-            )
+        new = dst_by_hash[file_hash]
+        src = os.path.join(root, old.path.replace("/", os.sep))
+        dst = os.path.join(root, new.path.replace("/", os.sep))
+        if not _safe_path(src, real_root) or not _safe_path(dst, real_root):
+            print(f"⚠️ Skipping move from '{old.path}' to '{new.path}' (outside root).")
             continue
 
-        if os.path.exists(full_path):
-            print(f"Removing file: {full_path}")
-            os.remove(full_path)
-            handled_paths.add(item.path)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        print(f"📦 Moving file: {src} -> {dst}")
+        shutil.move(src, dst)
+        handled.update({old.path, new.path})
 
-    # Step 4: Delete empty directories (bottom-up)
-    dirs_to_check: Set[str] = set()
-    for item in missing_items:
-        # Start with the directory itself if it's a dir, or the file's parent dir.
+
+def _delete_missing_files(
+    missing: List[FlatFileItem], root: str, real_root: str, handled: Set[str]
+) -> None:
+    for item in missing:
+        if item.path in handled or item.path.endswith("/"):
+            continue
+        full = os.path.join(root, item.path.replace("/", os.sep))
+        if not _safe_path(full, real_root):
+            print(f"⚠️ Skipping delete of '{item.path}' (outside root).")
+            continue
+        if os.path.exists(full):
+            print(f"🗑️ Deleting file: {full}")
+            os.remove(full)
+            handled.add(item.path)
+
+
+def _delete_empty_dirs(missing: List[FlatFileItem], root: str, real_root: str) -> None:
+    dirs = set()
+    for item in missing:
         path = item.path
-        current_dir = path.strip("/") if path.endswith("/") else os.path.dirname(path)
-
-        # Walk up the tree, adding each parent to the set of candidates for removal.
-        while current_dir:
-            dirs_to_check.add(current_dir)
-            parent = os.path.dirname(current_dir)
-            # Stop if we hit the top of the relative path.
-            if parent == current_dir:
+        current = path.strip("/") if path.endswith("/") else os.path.dirname(path)
+        while current:
+            dirs.add(current)
+            parent = os.path.dirname(current)
+            if parent == current:
                 break
-            current_dir = parent
+            current = parent
 
-    # Sort by depth (deepest first) to ensure we delete subdirectories before parents.
     for dir_path in sorted(
-        list(dirs_to_check), key=lambda p: p.count("/") + p.count("\\"), reverse=True
+        dirs, key=lambda p: p.count("/") + p.count("\\"), reverse=True
     ):
-        full_path = os.path.join(root_dir, dir_path.replace("/", os.sep))
-
-        # Ensure the directory to be deleted is within the root directory
-        if not os.path.realpath(full_path).startswith(real_root_dir):
-            print(
-                f"Skipping rmdir on '{dir_path}' because it is outside the target directory."
-            )
+        full = os.path.join(root, dir_path.replace("/", os.sep))
+        if not _safe_path(full, real_root):
+            print(f"⚠️ Skipping rmdir '{dir_path}' (outside root).")
             continue
-
-        if os.path.isdir(full_path):
+        if os.path.isdir(full):
             try:
-                os.rmdir(full_path)
-                print(f"Removed empty directory: {full_path}")
+                os.rmdir(full)
+                print(f"✅ Removed empty dir: {full}")
             except OSError:
-                pass
+                pass  # Not empty
+
+
+def _safe_path(path: str, root: str) -> bool:
+    return os.path.realpath(path).startswith(root)
