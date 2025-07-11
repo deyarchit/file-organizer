@@ -7,6 +7,7 @@ from organizer.disk_operations import (
     FlatFileItem,
 )
 import os
+from typing import List
 
 
 # Helper function to create dummy files for testing
@@ -210,3 +211,29 @@ def test_apply_changes_integration(tmp_path):
     moved_file = root_dir / "b" / "moved.txt"
     assert moved_file.exists()
     assert moved_file.read_text() == "content"
+
+
+def test_apply_changes_does_not_affect_outside_directory(tmp_path):
+    """
+    Test that apply_changes refuses to delete files outside the target directory.
+    This is a test for a path traversal vulnerability.
+    """
+    # Setup: Create a root directory and a sensitive file outside of it
+    root_dir = tmp_path / "target"
+    root_dir.mkdir()
+
+    sensitive_file = tmp_path / "sensitive.txt"
+    sensitive_file.write_text("do not delete this file")
+
+    # Define a state where a "current" file path points outside the root_dir
+    # This simulates a malicious or corrupted state file.
+    current_items = [FlatFileItem(path="../sensitive.txt", hash="any_hash", size=100)]
+    # The desired state is empty, so the function will try to delete the "missing" item.
+    desired_items: List[FlatFileItem] = []
+
+    # Action: Run apply_changes, which should detect the dangerous path and skip it
+    apply_changes(current_items, desired_items, str(root_dir))
+
+    # Assert: The sensitive file outside the root directory MUST still exist.
+    assert sensitive_file.exists()
+    assert sensitive_file.read_text() == "do not delete this file"

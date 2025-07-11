@@ -1,6 +1,6 @@
 import os
 import shutil
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Set
 from .models import FlatFileItem
 from .utils import _calculate_md5
 
@@ -92,12 +92,15 @@ def apply_changes(
     root_dir: str,
 ) -> None:
     """
-    Applies filesystem changes to match the desired structure, including the removal
-    of nested empty directories.
+    Applies filesystem changes to match the desired structure, ensuring all
+    operations are securely within the root_dir.
     """
     if not os.path.isdir(root_dir):
         print(f"Error: Root directory '{root_dir}' does not exist.")
         return
+
+    # Get the real, absolute path of the root directory for security checks
+    real_root_dir = os.path.realpath(root_dir)
 
     missing_items, added_items = compare_structures(current_items, desired_items)
 
@@ -130,8 +133,20 @@ def apply_changes(
 
             full_old_path = os.path.join(root_dir, old_item.path.replace("/", os.sep))
             full_new_path = os.path.join(root_dir, new_item.path.replace("/", os.sep))
-            dest_dir = os.path.dirname(full_new_path)
 
+            # Ensure both source and destination are within the root directory
+            real_old_path = os.path.realpath(full_old_path)
+            real_new_path = os.path.realpath(full_new_path)
+
+            if not real_old_path.startswith(
+                real_root_dir
+            ) or not real_new_path.startswith(real_root_dir):
+                print(
+                    f"Skipping move from '{old_item.path}' to '{new_item.path}' as it's outside the target directory."
+                )
+                continue
+
+            dest_dir = os.path.dirname(full_new_path)
             if not os.path.exists(dest_dir):
                 os.makedirs(dest_dir, exist_ok=True)
 
@@ -147,14 +162,23 @@ def apply_changes(
     for item in missing_items:
         if item.path in handled_paths or item.path.endswith("/"):
             continue
+
         full_path = os.path.join(root_dir, item.path.replace("/", os.sep))
+
+        # Ensure the path to be deleted is within the root directory
+        if not os.path.realpath(full_path).startswith(real_root_dir):
+            print(
+                f"Skipping deletion of '{item.path}' because it is outside the target directory."
+            )
+            continue
+
         if os.path.exists(full_path):
             print(f"Removing file: {full_path}")
             os.remove(full_path)
             handled_paths.add(item.path)
 
     # Step 4: Delete empty directories (bottom-up)
-    dirs_to_check = set()
+    dirs_to_check: Set[str] = set()
     for item in missing_items:
         # Start with the directory itself if it's a dir, or the file's parent dir.
         path = item.path
@@ -174,11 +198,17 @@ def apply_changes(
         list(dirs_to_check), key=lambda p: p.count("/") + p.count("\\"), reverse=True
     ):
         full_path = os.path.join(root_dir, dir_path.replace("/", os.sep))
-        # Check if directory exists and is empty before trying to remove it.
+
+        # Ensure the directory to be deleted is within the root directory
+        if not os.path.realpath(full_path).startswith(real_root_dir):
+            print(
+                f"Skipping rmdir on '{dir_path}' because it is outside the target directory."
+            )
+            continue
+
         if os.path.isdir(full_path):
             try:
                 os.rmdir(full_path)
-                print(f"✅ Removed empty directory: {full_path}")
+                print(f"Removed empty directory: {full_path}")
             except OSError:
-                # This is expected if the directory is not empty.
                 pass
