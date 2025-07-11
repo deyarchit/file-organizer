@@ -1,10 +1,6 @@
 from litellm import completion
 from typing import List
-from organizer.disk_operations import (
-    create_json_from_dir,
-    compare_structures,
-    apply_changes,
-)
+from organizer.disk_operations import FileSystemSync
 from dotenv import load_dotenv
 from organizer.models import FlatFileItem, LLMResponseSchema
 
@@ -15,7 +11,9 @@ load_dotenv()
 
 
 def organize(path: str) -> None:
-    dir_json: List[FlatFileItem] | None = create_json_from_dir(path)
+    syncer = FileSystemSync(path)
+
+    dir_json: List[FlatFileItem] | None = FileSystemSync.create_snapshot(path)
     if dir_json:
         print(f"Loaded dir_json: {dir_json}")
     else:
@@ -49,7 +47,7 @@ def organize(path: str) -> None:
 
         for strategy in parsed_response.strategies:
             print(f"Evaluating strategy: {strategy.name}")
-            missing, added = compare_structures(
+            missing, added = FileSystemSync.compare_structures(
                 dir_json, strategy.items, files_only=True
             )
             if len(missing) > 0 or len(added) > 0:
@@ -68,7 +66,7 @@ def organize(path: str) -> None:
         for strategy in parsed_response.strategies:
             if strategy.name == selected_strategy:
                 print(f"Applying reorganization strategy: {selected_strategy}")
-                apply_changes(dir_json, strategy.items, path)
+                syncer.sync(dir_json, strategy.items)
 
     except Exception as e:
         print(f"An error occurred: {e}")
