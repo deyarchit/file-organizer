@@ -142,7 +142,7 @@ if __name__ == "__main__":
     print("--- Generating custom test files with deeper nesting (max depth 5) ---")
     custom_themes = ["client_data", "financial_records", "marketing_materials"]
     custom_extensions = [".csv", ".xml", ".json", ".zip"]
-    custom_files_dir = os.path.join(os.getcwd(), "data/unorganized")
+    custom_files_dir = os.path.join(os.getcwd(), "tests/data/integration")
 
     custom_files_nested = create_themed_test_files_with_nesting(
         base_dir=custom_files_dir,

@@ -89,7 +89,7 @@ def test_compare_same_filename_different_hash():
 
 def test_compare_files_only_mode():
     current = [
-        FlatFileItem(path="a/file.txt", hash="h1", size=10),
+        FlatFileItem(path="a/b/c/file.txt", hash="h1", size=10),
         FlatFileItem(path="b/stale.txt", hash="h_stale", size=10),
         FlatFileItem(path="empty_dir/"),
     ]

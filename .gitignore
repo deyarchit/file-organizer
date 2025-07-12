@@ -12,3 +12,4 @@ wheels/
 # Custom ignores
 .env
 .notes
+tests/data/integration

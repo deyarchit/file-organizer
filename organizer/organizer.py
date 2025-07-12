@@ -81,7 +81,8 @@ Your proposed plans could provide suggestions that:
 * **Group similar file types** (e.g., all `.csv` files, all `.xml` files).
 * **Consolidate files related to the same project or client**.
 * **Reduce unnecessary nested subfolders.
-* **You are encouraged to rename folders to improve organization.
+* **You are encouraged to rename folders to improve organization but do not rename files
+
 
 Present your suggestions as a JSON array, where each element is one of your proposed organization strategy JSON object.
     """

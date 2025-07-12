@@ -8,6 +8,10 @@ test:
 	@echo "Running tests..."
 	.venv/bin/python -m pytest
 
-tidy: lint test
+generate-integ-data:
+	@echo "Generating integration test data..."
+	.venv/bin/python tests/data_generator.py
+
+pr: lint test
 
 .PHONY: *
