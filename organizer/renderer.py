@@ -33,7 +33,7 @@ class ConsoleRenderer:
 
         fs_tree: Dict[str, Union[FlatFileItem, dict]] = {}
         for item in items:
-            relative_path = item.path[len(prefix) :]
+            relative_path = os.path.relpath(item.path, prefix) if prefix else item.path
             parts = [p for p in relative_path.strip("/").split("/") if p]
             if parts:
                 insert_path(fs_tree, parts, item)
@@ -49,7 +49,8 @@ class ConsoleRenderer:
                 desc = f"📄 {label}"
                 parent.add(desc)
 
-        add_to_tree(tree, fs_tree)
+        for name in sorted(fs_tree):
+            add_to_tree(tree, fs_tree[name], name)
         return tree
 
     def render_file_tree(self, items: List[FlatFileItem]) -> None:

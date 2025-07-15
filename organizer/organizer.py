@@ -68,17 +68,17 @@ class FileOrganizer:
         current_structure: List[FlatFileItem],
         proposed_structures: List[OrganizationStrategy],
     ) -> bool:
+        all_valid = True
         for strategy in proposed_structures:
-            # print(f"Evaluating strategy: {strategy.name}")
             missing, added = DiskOperations.compare_structures(
                 current_structure, strategy.items, files_only=True
             )
             if len(missing) > 0 or len(added) > 0:
-                print(
-                    f"Files added/removed from proposed strategy, skipping. Added: {added} Removed: {missing}"
+                typer.echo(
+                    f"Files added/removed from proposed strategy, skipping. Added: {len(added)} Removed: {len(missing)}"
                 )
-                return False
-        return True
+                all_valid = False
+        return all_valid
 
     def select_strategy(self, proposed_structures: List[OrganizationStrategy]) -> int:
         while True:
@@ -115,6 +115,9 @@ class FileOrganizer:
             if current_structure:
                 self.renderer.render_file_tree(current_structure)
             else:
+                typer.secho(
+                    "No files found in the specified directory.", fg=typer.colors.YELLOW
+                )
                 return
 
             parsed_response = self.generate_options(current_structure)
