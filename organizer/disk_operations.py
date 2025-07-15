@@ -5,10 +5,10 @@ from .models import FlatFileItem
 from .utils import _calculate_short_sha256
 
 
-class FileSystemSync:
+class DiskOperations:
     def __init__(self, root_dir: str):
         if not os.path.isdir(root_dir):
-            raise ValueError(f"❌ Root directory '{root_dir}' does not exist.")
+            raise ValueError(f"Root directory '{root_dir}' does not exist.")
         self.root_dir = root_dir
         self.real_root = os.path.realpath(root_dir)
         self.handled_paths: Set[str] = set()
@@ -28,7 +28,7 @@ class FileSystemSync:
             if item.path.endswith("/"):
                 full_path = self._to_abs(item.path)
                 if not os.path.exists(full_path):
-                    print(f"📁 Creating directory: {full_path}")
+                    print(f"Creating directory: {full_path}")
                     os.makedirs(full_path, exist_ok=True)
                 self.handled_paths.add(item.path)
 
@@ -50,12 +50,12 @@ class FileSystemSync:
 
             if not self._is_safe(src) or not self._is_safe(dst):
                 print(
-                    f"⚠️ Skipping move from '{src_item.path}' to '{dst_item.path}' (outside root)."
+                    f"Skipping move from '{src_item.path}' to '{dst_item.path}' (outside root)."
                 )
                 continue
 
             os.makedirs(os.path.dirname(dst), exist_ok=True)
-            print(f"📦 Moving file: {src} -> {dst}")
+            print(f"Moving file: {src} -> {dst}")
             shutil.move(src, dst)
             self.handled_paths.update({src_item.path, dst_item.path})
 
@@ -66,11 +66,11 @@ class FileSystemSync:
 
             full = self._to_abs(item.path)
             if not self._is_safe(full):
-                print(f"⚠️ Skipping delete of '{item.path}' (outside root).")
+                print(f"Skipping delete of '{item.path}' (outside root).")
                 continue
 
             if os.path.exists(full):
-                print(f"🗑️ Deleting file: {full}")
+                print(f"Deleting file: {full}")
                 os.remove(full)
                 self.handled_paths.add(item.path)
 
@@ -91,12 +91,12 @@ class FileSystemSync:
         ):
             full = self._to_abs(dir_path)
             if not self._is_safe(full):
-                print(f"⚠️ Skipping rmdir '{dir_path}' (outside root).")
+                print(f"Skipping rmdir '{dir_path}' (outside root).")
                 continue
             if os.path.isdir(full):
                 try:
                     os.rmdir(full)
-                    print(f"✅ Removed empty dir: {full}")
+                    print(f"Removed empty dir: {full}")
                 except OSError:
                     pass  # Not empty
 

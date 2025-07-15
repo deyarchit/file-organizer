@@ -2,7 +2,7 @@ import os
 from typing import List
 import pytest
 
-from organizer.disk_operations import FileSystemSync, FlatFileItem
+from organizer.disk_operations import DiskOperations, FlatFileItem
 from organizer.utils import _calculate_short_sha256
 
 
@@ -31,7 +31,7 @@ def temp_dir_structure(tmp_path):
 
 
 def test_create_snapshot_valid(temp_dir_structure):
-    items = FileSystemSync.create_snapshot(temp_dir_structure)
+    items = DiskOperations.create_snapshot(temp_dir_structure)
     assert items is not None
     assert len(items) == 4
 
@@ -43,13 +43,13 @@ def test_create_snapshot_valid(temp_dir_structure):
 
 
 def test_create_snapshot_non_existent():
-    assert FileSystemSync.create_snapshot("non_existent_dir") is None
+    assert DiskOperations.create_snapshot("non_existent_dir") is None
 
 
 def test_create_snapshot_empty(tmp_path):
     empty_dir = tmp_path / "empty"
     os.makedirs(empty_dir)
-    assert FileSystemSync.create_snapshot(str(empty_dir)) == []
+    assert DiskOperations.create_snapshot(str(empty_dir)) == []
 
 
 # --- Tests for compare_structures ---
@@ -60,7 +60,7 @@ def test_compare_structures_no_changes():
         FlatFileItem(path="file.txt", hash="h1", size=10),
         FlatFileItem(path="dir/"),
     ]
-    missing, added = FileSystemSync.compare_structures(items, items)
+    missing, added = DiskOperations.compare_structures(items, items)
     assert missing == []
     assert added == []
 
@@ -74,7 +74,7 @@ def test_compare_structures_with_changes():
         FlatFileItem(path="file2.txt", hash="h2", size=20),
         FlatFileItem(path="dir1/"),
     ]
-    missing, added = FileSystemSync.compare_structures(current, desired)
+    missing, added = DiskOperations.compare_structures(current, desired)
     assert missing == [FlatFileItem(path="file1.txt", hash="h1", size=10)]
     assert added == [FlatFileItem(path="file2.txt", hash="h2", size=20)]
 
@@ -82,7 +82,7 @@ def test_compare_structures_with_changes():
 def test_compare_same_filename_different_hash():
     current = [FlatFileItem(path="file.txt", hash="h1", size=10)]
     desired = [FlatFileItem(path="file.txt", hash="h2", size=10)]
-    missing, added = FileSystemSync.compare_structures(current, desired)
+    missing, added = DiskOperations.compare_structures(current, desired)
     assert missing == current
     assert added == desired
 
@@ -98,7 +98,7 @@ def test_compare_files_only_mode():
         FlatFileItem(path="y/new.txt", hash="h_new", size=10),
     ]
 
-    missing, added = FileSystemSync.compare_structures(
+    missing, added = DiskOperations.compare_structures(
         current, desired, files_only=True
     )
 
@@ -116,7 +116,7 @@ def test_compare_multiple_files_same_name_different_hash():
         FlatFileItem(path="d/file.txt", hash="h3", size=30),
     ]
 
-    missing, added = FileSystemSync.compare_structures(current, desired)
+    missing, added = DiskOperations.compare_structures(current, desired)
 
     assert sorted(missing, key=lambda x: x.path) == sorted(
         current, key=lambda x: x.path
@@ -136,7 +136,7 @@ def test_apply_changes_integration(tmp_path):
     os.makedirs(root_dir / "delete_me_dir")
     os.makedirs(root_dir / "nested_empty" / "nested_empty" / "nested_empty")
 
-    current_items = FileSystemSync.create_snapshot(str(root_dir))
+    current_items = DiskOperations.create_snapshot(str(root_dir))
     assert current_items is not None
 
     move_hash = _calculate_short_sha256(str(root_dir / "a" / "move_me.txt"))
@@ -146,7 +146,7 @@ def test_apply_changes_integration(tmp_path):
         FlatFileItem(path="new_dir/"),
     ]
 
-    syncer = FileSystemSync(str(root_dir))
+    syncer = DiskOperations(str(root_dir))
     syncer.sync(current_items, desired_items)
 
     assert not (root_dir / "delete_me.txt").exists()
@@ -171,7 +171,7 @@ def test_apply_changes_does_not_affect_outside_directory(tmp_path):
     current_items = [FlatFileItem(path="../sensitive.txt", hash="any_hash", size=100)]
     desired_items: List[FlatFileItem] = []
 
-    syncer = FileSystemSync(str(root_dir))
+    syncer = DiskOperations(str(root_dir))
     syncer.sync(current_items, desired_items)
 
     assert sensitive_file.exists()
@@ -220,14 +220,14 @@ def test_partial_structure_move(tmp_path):
     create_dummy_file(root_dir / "a" / "b" / "c" / "d.txt", "deep")
 
     hash_val = _calculate_short_sha256(str(root_dir / "a" / "b" / "c" / "d.txt"))
-    current_items = FileSystemSync.create_snapshot(str(root_dir))
+    current_items = DiskOperations.create_snapshot(str(root_dir))
     assert current_items is not None
 
     desired_items = [
         FlatFileItem(path="x/y/z/d.txt", hash=hash_val, size=len("deep")),
     ]
 
-    syncer = FileSystemSync(str(root_dir))
+    syncer = DiskOperations(str(root_dir))
     syncer.sync(current_items, desired_items)
 
     assert not (root_dir / "a").exists()

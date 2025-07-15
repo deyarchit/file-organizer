@@ -1,33 +1,20 @@
 from litellm import completion
 from typing import List
-from organizer.disk_operations import FileSystemSync
+from organizer.disk_operations import DiskOperations
 from dotenv import load_dotenv
 from organizer.models import FlatFileItem, LLMResponseSchema
 
 load_dotenv()
-# import os
-
-# gemini_key = os.getenv("GEMINI_API_KEY")
 
 
 def organize(path: str) -> None:
-    syncer = FileSystemSync(path)
+    disk_ops = DiskOperations(path)
 
-    dir_json: List[FlatFileItem] | None = FileSystemSync.create_snapshot(path)
+    dir_json: List[FlatFileItem] | None = DiskOperations.create_snapshot(path)
     if dir_json:
         print(f"Loaded dir_json: {dir_json}")
     else:
         return
-
-    # response = completion(
-    #     model="ollama/qwen3:4b",
-    #     response_format=LLMResponseSchema,
-    #     messages=[
-    #         {"content": system_prompt, "role": "system"},
-    #         {"content": str(dir_json), "role": "user"},
-    #     ],
-    #     api_base="http://localhost:11434",
-    # )
 
     try:
         response = completion(
@@ -47,7 +34,7 @@ def organize(path: str) -> None:
 
         for strategy in parsed_response.strategies:
             print(f"Evaluating strategy: {strategy.name}")
-            missing, added = FileSystemSync.compare_structures(
+            missing, added = DiskOperations.compare_structures(
                 dir_json, strategy.items, files_only=True
             )
             if len(missing) > 0 or len(added) > 0:
@@ -66,7 +53,7 @@ def organize(path: str) -> None:
         for strategy in parsed_response.strategies:
             if strategy.name == selected_strategy:
                 print(f"Applying reorganization strategy: {selected_strategy}")
-                syncer.sync(dir_json, strategy.items)
+                disk_ops.sync(dir_json, strategy.items)
 
     except Exception as e:
         print(f"An error occurred: {e}")
