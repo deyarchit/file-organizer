@@ -3,7 +3,7 @@ from organizer.organizer import organize
 
 def main():
     print("Running organizer")
-    organize("/Users/deyarchit/Projects/ai/folder-organizer/tests/data/unorganized")
+    organize("./tests/data/integration")
 
 
 if __name__ == "__main__":

@@ -1,15 +1,11 @@
-import pytest
-from organizer.disk_operations import (
-    create_json_from_dir,
-    compare_structures,
-    apply_changes,
-    _calculate_md5,
-    FlatFileItem,
-)
 import os
+from typing import List
+import pytest
+
+from organizer.disk_operations import DiskOperations, FlatFileItem
+from organizer.utils import _calculate_short_sha256
 
 
-# Helper function to create dummy files for testing
 def create_dummy_file(filepath: str, content: str) -> None:
     """Creates a dummy file with specified content."""
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -23,7 +19,6 @@ def temp_dir_structure(tmp_path):
     root_dir = tmp_path / "root"
     os.makedirs(root_dir)
 
-    # Create files and directories
     create_dummy_file(root_dir / "file1.txt", "content1")
     create_dummy_file(root_dir / "subdir1" / "file2.txt", "content2")
     os.makedirs(root_dir / "empty_dir")
@@ -32,15 +27,12 @@ def temp_dir_structure(tmp_path):
     return str(root_dir)
 
 
-# --- Tests for create_json_from_dir ---
+# --- Tests for create_snapshot ---
 
 
-def test_create_json_from_dir_valid(temp_dir_structure):
-    """Test JSON creation from a valid directory structure."""
-    items = create_json_from_dir(temp_dir_structure)
+def test_create_snapshot_valid(temp_dir_structure):
+    items = DiskOperations.create_snapshot(temp_dir_structure)
     assert items is not None
-    # FIX: The fixture correctly creates two empty directories ('empty_dir' and 'subdir2')
-    # and two files, for a total of 4 items.
     assert len(items) == 4
 
     paths = {item.path for item in items}
@@ -50,36 +42,30 @@ def test_create_json_from_dir_valid(temp_dir_structure):
     assert "subdir2/" in paths
 
 
-def test_create_json_from_dir_non_existent():
-    """Test with a non-existent directory."""
-    assert create_json_from_dir("non_existent_dir") is None
+def test_create_snapshot_non_existent():
+    assert DiskOperations.create_snapshot("non_existent_dir") is None
 
 
-def test_create_json_from_dir_empty(tmp_path):
-    """Test with an empty directory."""
+def test_create_snapshot_empty(tmp_path):
     empty_dir = tmp_path / "empty"
     os.makedirs(empty_dir)
-    # An empty directory contains nothing, so the function should return an empty list
-    # as there are no files or empty subdirectories to report.
-    assert create_json_from_dir(str(empty_dir)) == []
+    assert DiskOperations.create_snapshot(str(empty_dir)) == []
 
 
 # --- Tests for compare_structures ---
 
 
 def test_compare_structures_no_changes():
-    """Test comparison with identical structures."""
     items = [
         FlatFileItem(path="file.txt", hash="h1", size=10),
         FlatFileItem(path="dir/"),
     ]
-    missing, added = compare_structures(items, items)
+    missing, added = DiskOperations.compare_structures(items, items)
     assert missing == []
     assert added == []
 
 
 def test_compare_structures_with_changes():
-    """Test comparison with added and missing files."""
     current = [
         FlatFileItem(path="file1.txt", hash="h1", size=10),
         FlatFileItem(path="dir1/"),
@@ -88,89 +74,81 @@ def test_compare_structures_with_changes():
         FlatFileItem(path="file2.txt", hash="h2", size=20),
         FlatFileItem(path="dir1/"),
     ]
-    missing, added = compare_structures(current, desired)
-    assert missing == ["file1.txt"]
-    assert added == ["file2.txt"]
+    missing, added = DiskOperations.compare_structures(current, desired)
+    assert missing == [FlatFileItem(path="file1.txt", hash="h1", size=10)]
+    assert added == [FlatFileItem(path="file2.txt", hash="h2", size=20)]
 
 
 def test_compare_same_filename_different_hash():
-    """Test files with the same name but different hashes are detected as changes."""
     current = [FlatFileItem(path="file.txt", hash="h1", size=10)]
     desired = [FlatFileItem(path="file.txt", hash="h2", size=10)]
-    missing, added = compare_structures(current, desired)
-    assert missing == ["file.txt"]
-    assert added == ["file.txt"]
+    missing, added = DiskOperations.compare_structures(current, desired)
+    assert missing == current
+    assert added == desired
 
 
 def test_compare_files_only_mode():
-    """Test files_only=True ignores paths and directories."""
     current = [
-        FlatFileItem(path="a/file.txt", hash="h1", size=10),
+        FlatFileItem(path="a/b/c/file.txt", hash="h1", size=10),
         FlatFileItem(path="b/stale.txt", hash="h_stale", size=10),
         FlatFileItem(path="empty_dir/"),
     ]
     desired = [
-        FlatFileItem(path="x/file.txt", hash="h1", size=10),  # Same name & hash
+        FlatFileItem(path="x/file.txt", hash="h1", size=10),
         FlatFileItem(path="y/new.txt", hash="h_new", size=10),
     ]
-    missing, added = compare_structures(current, desired, files_only=True)
-    assert missing == ["stale.txt"]
-    assert added == ["new.txt"]
+
+    missing, added = DiskOperations.compare_structures(
+        current, desired, files_only=True
+    )
+
+    assert missing == [FlatFileItem(path="b/stale.txt", hash="h_stale", size=10)]
+    assert added == [FlatFileItem(path="y/new.txt", hash="h_new", size=10)]
 
 
 def test_compare_multiple_files_same_name_different_hash():
-    """Test multiple files with same name but different hashes."""
     current = [
         FlatFileItem(path="a/file.txt", hash="h1", size=10),
         FlatFileItem(path="b/file.txt", hash="h2", size=20),
     ]
     desired = [
-        # This file could be a move of "a/file.txt" since hash is same
         FlatFileItem(path="c/file.txt", hash="h1", size=10),
-        # This is a new file
         FlatFileItem(path="d/file.txt", hash="h3", size=30),
     ]
-    missing, added = compare_structures(current, desired)
 
-    # ✅ **FIXED ASSERTION**
-    # The comparison is on `path::hash`. Since no exact match exists for
-    # the items in `current` within `desired`, both are considered missing.
-    assert sorted(missing) == sorted(["a/file.txt", "b/file.txt"])
+    missing, added = DiskOperations.compare_structures(current, desired)
 
-    # Conversely, the items in `desired` are not in `current` and are considered added.
-    assert sorted(added) == sorted(["c/file.txt", "d/file.txt"])
+    assert sorted(missing, key=lambda x: x.path) == sorted(
+        current, key=lambda x: x.path
+    )
+    assert sorted(added, key=lambda x: x.path) == sorted(desired, key=lambda x: x.path)
 
 
-# --- Tests for apply_changes ---
+# --- Tests for FileSystemSync.sync ---
 
 
 def test_apply_changes_integration(tmp_path):
-    """Integration test for applying changes to a directory."""
     root_dir = tmp_path / "sync_root"
     os.makedirs(root_dir)
 
-    # --- Initial state ---
     create_dummy_file(root_dir / "delete_me.txt", "old")
     create_dummy_file(root_dir / "a" / "move_me.txt", "content")
     os.makedirs(root_dir / "delete_me_dir")
     os.makedirs(root_dir / "nested_empty" / "nested_empty" / "nested_empty")
-    current_items = create_json_from_dir(str(root_dir))
-    move_hash = _calculate_md5(str(root_dir / "a" / "move_me.txt"))
 
+    current_items = DiskOperations.create_snapshot(str(root_dir))
     assert current_items is not None
 
-    # --- Desired state ---
-    # Note: apply_changes cannot create new file content, only move existing files.
-    # Therefore, we don't include a totally new file in desired_items for this test.
+    move_hash = _calculate_short_sha256(str(root_dir / "a" / "move_me.txt"))
+
     desired_items = [
         FlatFileItem(path="b/moved.txt", hash=move_hash, size=len("content")),
         FlatFileItem(path="new_dir/"),
     ]
 
-    # --- Apply changes ---
-    apply_changes(current_items, desired_items, str(root_dir))
+    syncer = DiskOperations(str(root_dir))
+    syncer.sync(current_items, desired_items)
 
-    # --- Verify final state ---
     assert not (root_dir / "delete_me.txt").exists()
     assert not (root_dir / "a" / "move_me.txt").exists()
     assert not (root_dir / "delete_me_dir").exists()
@@ -181,3 +159,125 @@ def test_apply_changes_integration(tmp_path):
     moved_file = root_dir / "b" / "moved.txt"
     assert moved_file.exists()
     assert moved_file.read_text() == "content"
+
+
+def test_apply_changes_does_not_affect_outside_directory(tmp_path):
+    root_dir = tmp_path / "target"
+    root_dir.mkdir()
+
+    sensitive_file = tmp_path / "sensitive.txt"
+    sensitive_file.write_text("do not delete this file")
+
+    current_items = [FlatFileItem(path="../sensitive.txt", hash="any_hash", size=100)]
+    desired_items: List[FlatFileItem] = []
+
+    syncer = DiskOperations(str(root_dir))
+    syncer.sync(current_items, desired_items)
+
+    assert sensitive_file.exists()
+    assert sensitive_file.read_text() == "do not delete this file"
+
+
+# def test_move_skipped_when_destination_outside_root(tmp_path):
+#     root_dir = tmp_path / "root"
+#     os.makedirs(root_dir)
+#     malicious_path = "../outside.txt"
+#     create_dummy_file(root_dir / "move_me.txt", "data")
+#     hash_val = _calculate_short_sha256(str(root_dir / "move_me.txt"))
+
+#     current_items = [FlatFileItem(path="move_me.txt", hash=hash_val, size=4)]
+#     desired_items = [FlatFileItem(path=malicious_path, hash=hash_val, size=4)]
+
+#     syncer = FileSystemSync(str(root_dir))
+#     syncer.sync(current_items, desired_items)
+
+#     # File should not be moved outside the root
+#     assert (root_dir / "move_me.txt").exists()
+#     assert not (tmp_path / "outside.txt").exists()
+
+
+# def test_files_with_same_hash_but_different_sizes_are_ignored(tmp_path):
+#     root_dir = tmp_path / "root"
+#     os.makedirs(root_dir)
+#     create_dummy_file(root_dir / "file1.txt", "abcde")  # 5 bytes
+#     hash_val = _calculate_short_sha256(str(root_dir / "file1.txt"))
+
+#     current_items = [FlatFileItem(path="file1.txt", hash=hash_val, size=5)]
+#     # Desired has same hash but wrong size
+#     desired_items = [FlatFileItem(path="moved.txt", hash=hash_val, size=10)]
+
+#     syncer = FileSystemSync(str(root_dir))
+#     syncer.sync(current_items, desired_items)
+
+#     # File should not move since size doesn't match
+#     assert (root_dir / "file1.txt").exists()
+#     assert not (root_dir / "moved.txt").exists()
+
+
+def test_partial_structure_move(tmp_path):
+    root_dir = tmp_path / "root"
+    os.makedirs(root_dir)
+    create_dummy_file(root_dir / "a" / "b" / "c" / "d.txt", "deep")
+
+    hash_val = _calculate_short_sha256(str(root_dir / "a" / "b" / "c" / "d.txt"))
+    current_items = DiskOperations.create_snapshot(str(root_dir))
+    assert current_items is not None
+
+    desired_items = [
+        FlatFileItem(path="x/y/z/d.txt", hash=hash_val, size=len("deep")),
+    ]
+
+    syncer = DiskOperations(str(root_dir))
+    syncer.sync(current_items, desired_items)
+
+    assert not (root_dir / "a").exists()
+    assert (root_dir / "x/y/z/d.txt").exists()
+    assert (root_dir / "x/y/z/d.txt").read_text() == "deep"
+
+
+# def test_conflicting_file_and_dir(tmp_path):
+#     root_dir = tmp_path / "root"
+#     os.makedirs(root_dir)
+#     create_dummy_file(root_dir / "conflict", "I am a file")
+
+#     current_items = FileSystemSync.create_snapshot(str(root_dir))
+#     desired_items = [FlatFileItem(path="conflict/", hash=None, size=None)]
+
+#     syncer = FileSystemSync(str(root_dir))
+#     syncer.sync(current_items, desired_items)
+
+#     # File still exists because we don't auto-remove conflicting files for dirs
+#     assert (root_dir / "conflict").is_file()
+
+
+# def test_existing_directory_is_preserved(tmp_path):
+#     root_dir = tmp_path / "root"
+#     (root_dir / "pre_existing").mkdir()
+
+#     current_items = FileSystemSync.create_snapshot(str(root_dir))
+#     desired_items = [FlatFileItem(path="pre_existing/")]
+
+#     syncer = FileSystemSync(str(root_dir))
+#     syncer.sync(current_items, desired_items)
+
+#     # Directory should not be deleted
+#     assert (root_dir / "pre_existing").is_dir()
+
+
+# def test_ignored_non_matching_hash_move(tmp_path):
+#     root_dir = tmp_path / "root"
+#     os.makedirs(root_dir)
+#     create_dummy_file(root_dir / "original.txt", "original content")
+
+#     hash_actual = _calculate_short_sha256(str(root_dir / "original.txt"))
+#     hash_fake = "deadbeef"  # Mismatched hash
+
+#     current_items = [FlatFileItem(path="original.txt", hash=hash_actual, size=17)]
+#     desired_items = [FlatFileItem(path="new_place.txt", hash=hash_fake, size=17)]
+
+#     syncer = FileSystemSync(str(root_dir))
+#     syncer.sync(current_items, desired_items)
+
+#     # File should not be moved since hashes don't match
+#     assert (root_dir / "original.txt").exists()
+#     assert not (root_dir / "new_place.txt").exists()
