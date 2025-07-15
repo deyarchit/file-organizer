@@ -1,10 +1,14 @@
-from organizer.organizer import organize
+import typer
+from organizer.organizer import FileOrganizer
+
+app = typer.Typer()
 
 
-def main():
-    print("Running organizer")
-    organize("./tests/data/integration")
+@app.command()
+def organize(path: str) -> None:
+    organizer = FileOrganizer(path)
+    organizer.organize()
 
 
 if __name__ == "__main__":
-    main()
+    app()
