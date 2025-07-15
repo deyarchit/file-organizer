@@ -87,7 +87,7 @@ class DiskOperations:
                 current = parent
 
         for dir_path in sorted(
-            dirs, key=lambda p: p.count("/") + p.count("\\"), reverse=True
+            dirs, key=lambda p: p.replace("\\", "/").count("/"), reverse=True
         ):
             full = self._to_abs(dir_path)
             if not self._is_safe(full):

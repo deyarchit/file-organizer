@@ -26,7 +26,6 @@ def organize(path: str) -> None:
             ],
             temperature=0.0,
         )
-        # print(response.choices[0].message.content)
 
         parsed_response: LLMResponseSchema = LLMResponseSchema.model_validate_json(
             response.choices[0].message.content
@@ -66,9 +65,9 @@ For each proposed plan, you must output a JSON object that adheres strictly to t
 
 Your proposed plans could provide suggestions that:
 * **Group similar file types** (e.g., all `.csv` files, all `.xml` files).
-* **Consolidate files related to the same project or client**.
-* **Reduce unnecessary nested subfolders.
-* **You are encouraged to rename folders to improve organization but do not rename files
+* **Consolidate files related to the same project or client**
+* **Reduce unnecessary nested subfolders.**
+* **You are encouraged to rename folders to improve organization but do not rename files.**
 
 
 Present your suggestions as a JSON array, where each element is one of your proposed organization strategy JSON object.
