@@ -27,6 +27,11 @@ class DiskOperations:
         for item in added:
             if item.path.endswith("/"):
                 full_path = self._to_abs(item.path)
+                if not self._is_safe(full_path):
+                    print(
+                        f"Skipping directory creation for '{item.path}' (outside root)."
+                    )
+                    continue
                 if not os.path.exists(full_path):
                     print(f"Creating directory: {full_path}")
                     os.makedirs(full_path, exist_ok=True)
