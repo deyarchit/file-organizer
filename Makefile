@@ -1,8 +1,12 @@
 lint:
 	@echo "Running ruff..."
-	uv run ruff check --fix
+	uv run ruff check
 	@echo "Running mypy..."
-	mypy --python-executable .venv/bin/python . --show-error-end --check-untyped-defs --disallow-incomplete-defs
+	uv run mypy . --show-error-end --check-untyped-defs --disallow-incomplete-defs
+
+format:
+	@echo "Cleaning up using ruff..."
+	uv run ruff check --fix
 
 test:
 	@echo "Running tests..."
@@ -12,6 +16,7 @@ generate-integ-data:
 	@echo "Generating integration test data..."
 	.venv/bin/python tests/data_generator.py
 
-pr: lint test
+ci: lint test
+pr: lint format test
 
 .PHONY: *
