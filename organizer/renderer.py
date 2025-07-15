@@ -1,4 +1,4 @@
-from typing import List, Union, Dict
+from typing import List, Dict, Any
 from .models import FlatFileItem, OrganizationStrategy
 from rich.tree import Tree
 from rich.table import Table
@@ -11,46 +11,43 @@ class ConsoleRenderer:
         self.console = Console()
 
     def generate_file_tree(self, items: List[FlatFileItem]) -> Tree:
-        # Find common prefix directory
-        raw_paths = [item.path for item in items]
-        prefix = os.path.commonprefix(raw_paths)
+        if not items:
+            return Tree("📁 .")
 
-        # Ensure we only use directory boundaries (not partial filenames)
-        prefix = prefix[: prefix.rfind("/") + 1] if "/" in prefix else ""
+        paths = [item.path for item in items]
+        prefix = os.path.commonprefix(paths)
+        if "/" in prefix:
+            prefix = prefix[: prefix.rfind("/") + 1]
+        else:
+            prefix = ""
 
-        # Use cleaned-up prefix for the tree label
         root_label = f"📁 {prefix.strip('/') or '.'}"
         tree = Tree(root_label)
+        fs_tree: Dict[str, Any] = {}
 
-        def insert_path(root: Dict, parts: List[str], item: FlatFileItem) -> None:
-            for part in parts[:-1]:
-                root = root.setdefault(part, {})
-            final_part = parts[-1]
-            if item.path.endswith("/"):
-                root.setdefault(final_part, {})
-            else:
-                root[final_part] = item
-
-        fs_tree: Dict[str, Union[FlatFileItem, dict]] = {}
         for item in items:
-            relative_path = os.path.relpath(item.path, prefix) if prefix else item.path
-            parts = [p for p in relative_path.strip("/").split("/") if p]
-            if parts:
-                insert_path(fs_tree, parts, item)
-
-        def add_to_tree(
-            parent: Tree, node: Union[Dict, FlatFileItem], label: str = ""
-        ) -> None:
-            if isinstance(node, dict):
-                folder_tree = parent.add(f"📁 {label}" if label else "📁")
-                for name in sorted(node):
-                    add_to_tree(folder_tree, node[name], name)
+            rel_path = os.path.relpath(item.path, prefix) if prefix else item.path
+            parts = [p for p in rel_path.strip("/").split("/") if p]
+            current = fs_tree
+            for part in parts[:-1]:
+                current = current.setdefault(part, {})
+            final = parts[-1]
+            if item.path.endswith("/"):
+                current.setdefault(final, {})
             else:
-                desc = f"📄 {label}"
-                parent.add(desc)
+                current[final] = item
 
-        for name in sorted(fs_tree):
-            add_to_tree(tree, fs_tree[name], name)
+        def build_tree(parent: Tree, node: Any, label: str) -> None:
+            if isinstance(node, dict):
+                folder = parent.add(f"📁 {label}" if label else "📁")
+                for key in sorted(node):
+                    build_tree(folder, node[key], key)
+            else:
+                parent.add(f"📄 {label}")
+
+        for key in sorted(fs_tree):
+            build_tree(tree, fs_tree[key], key)
+
         return tree
 
     def render_file_tree(self, items: List[FlatFileItem]) -> None:
