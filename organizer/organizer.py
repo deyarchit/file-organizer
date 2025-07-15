@@ -37,11 +37,7 @@ class FileOrganizer:
     def __init__(self, root_path: str, renderer: ConsoleRenderer | None = None):
         self.root_path = root_path
         self.disk_ops = DiskOperations(root_path)
-        self.renderer = (
-            ConsoleRenderer()
-            if renderer is None or not callable(renderer)
-            else renderer
-        )
+        self.renderer = renderer if renderer is not None else ConsoleRenderer()
 
     @progress_task("Generating options...")
     def generate_options(
