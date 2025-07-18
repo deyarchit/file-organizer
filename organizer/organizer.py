@@ -1,12 +1,16 @@
-from litellm import completion
-from typing import List, Callable
 from functools import wraps
-from organizer.disk_operations import DiskOperations
-from dotenv import load_dotenv
-from organizer.models import FlatFileItem, LLMResponseSchema, OrganizationStrategy
-from .renderer import ConsoleRenderer
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from typing import Callable, List, Union
+
 import typer
+from dotenv import load_dotenv
+from litellm import CustomStreamWrapper, completion
+from litellm.types.utils import ModelResponse, StreamingChoices
+from rich.progress import Progress, SpinnerColumn, TextColumn
+
+from organizer.disk_operations import DiskOperations
+from organizer.models import FlatFileItem, LLMResponseSchema, OrganizationStrategy
+
+from .renderer import ConsoleRenderer
 
 load_dotenv()
 
@@ -40,10 +44,8 @@ class FileOrganizer:
         self.renderer = renderer if renderer is not None else ConsoleRenderer()
 
     @progress_task("Generating options...")
-    def generate_options(
-        self, current_structure: List[FlatFileItem]
-    ) -> LLMResponseSchema:
-        response = completion(
+    def generate_options(self, current_structure: List[FlatFileItem]) -> LLMResponseSchema:
+        response: Union[ModelResponse, CustomStreamWrapper] = completion(
             model="gemini/gemini-2.5-flash",
             response_format=LLMResponseSchema,
             messages=[
@@ -53,9 +55,18 @@ class FileOrganizer:
             temperature=0.0,
         )
 
-        parsed_response: LLMResponseSchema = LLMResponseSchema.model_validate_json(
-            response.choices[0].message.content
-        )
+        if isinstance(response, CustomStreamWrapper):
+            raise TypeError("Expected Non-Streaming response but got streaming response")
+
+        if isinstance(response.choices[0], StreamingChoices):
+            raise TypeError("Expected Non-Streaming response but got streaming response")
+
+        content = response.choices[0].message.content
+        if content is None:
+            raise ValueError("LLM response content is None")
+
+        parsed_response: LLMResponseSchema = LLMResponseSchema.model_validate_json(content)
+
         return parsed_response
 
     @progress_task("Validating options...")
@@ -79,9 +90,7 @@ class FileOrganizer:
     def select_strategy(self, proposed_structures: List[OrganizationStrategy]) -> int:
         while True:
             try:
-                selected = typer.prompt(
-                    "Select the reorganization strategy no.", type=int
-                )
+                selected = typer.prompt("Select the reorganization strategy no.", type=int)
                 if not 0 <= selected < len(proposed_structures):
                     typer.secho(
                         f"Invalid selection. Enter a number between 0 and {len(proposed_structures) - 1}.",
@@ -105,15 +114,13 @@ class FileOrganizer:
 
     def organize(self) -> None:
         try:
-            current_structure: List[FlatFileItem] | None = (
-                DiskOperations.create_snapshot(self.root_path)
+            current_structure: List[FlatFileItem] | None = DiskOperations.create_snapshot(
+                self.root_path
             )
             if current_structure:
                 self.renderer.render_file_tree(current_structure)
             else:
-                typer.secho(
-                    "No files found in the specified directory.", fg=typer.colors.YELLOW
-                )
+                typer.secho("No files found in the specified directory.", fg=typer.colors.YELLOW)
                 return
 
             parsed_response = self.generate_options(current_structure)
@@ -123,9 +130,7 @@ class FileOrganizer:
                 return
 
             option = self.select_strategy(parsed_response.strategies)
-            self.apply_strategy(
-                current_structure, parsed_response.strategies[option].items
-            )
+            self.apply_strategy(current_structure, parsed_response.strategies[option].items)
 
         except Exception as e:
             print(f"An error occurred: {e}")

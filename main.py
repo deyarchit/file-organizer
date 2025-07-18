@@ -1,4 +1,5 @@
 import typer
+
 from organizer.organizer import FileOrganizer
 
 app = typer.Typer()

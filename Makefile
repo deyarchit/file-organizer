@@ -2,7 +2,9 @@ lint:
 	@echo "Running ruff..."
 	uv run ruff check
 	@echo "Running mypy..."
-	uv run mypy . --show-error-end --check-untyped-defs --disallow-incomplete-defs
+	uv run mypy .
+	@echo "Running pyright..."
+	uv run pyright .
 
 format:
 	@echo "Cleaning up using ruff..."
