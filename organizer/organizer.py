@@ -1,8 +1,8 @@
+import logging
 from functools import wraps
 from typing import Callable, List, Union
 
 import typer
-from dotenv import load_dotenv
 from litellm import CustomStreamWrapper, completion
 from litellm.types.utils import ModelResponse, StreamingChoices
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -12,7 +12,7 @@ from organizer.models import FlatFileItem, LLMResponseSchema, OrganizationStrate
 
 from .renderer import ConsoleRenderer
 
-load_dotenv()
+logger = logging.getLogger(__name__)
 
 
 def progress_task(description: str) -> Callable:
@@ -133,7 +133,7 @@ class FileOrganizer:
             self.apply_strategy(current_structure, parsed_response.strategies[option].items)
 
         except Exception as e:
-            print(f"An error occurred: {e}")
+            logger.error("An error occurred: %s", e)
 
 
 system_prompt = """

@@ -1,8 +1,12 @@
+import logging
 import os
 import shutil
-from typing import List, Optional, Tuple, Set
+from typing import List, Optional, Set, Tuple
+
 from .models import FlatFileItem
 from .utils import _calculate_short_sha256
+
+logger = logging.getLogger(__name__)
 
 
 class DiskOperations:
@@ -13,9 +17,7 @@ class DiskOperations:
         self.real_root = os.path.realpath(root_dir)
         self.handled_paths: Set[str] = set()
 
-    def sync(
-        self, current_items: List[FlatFileItem], desired_items: List[FlatFileItem]
-    ) -> None:
+    def sync(self, current_items: List[FlatFileItem], desired_items: List[FlatFileItem]) -> None:
         """Apply changes to match the desired file structure."""
         missing, added = self.compare_structures(current_items, desired_items)
         self._create_directories(added)
@@ -28,21 +30,15 @@ class DiskOperations:
             if item.path.endswith("/"):
                 full_path = self._to_abs(item.path)
                 if not self._is_safe(full_path):
-                    print(
-                        f"Skipping directory creation for '{item.path}' (outside root)."
-                    )
+                    logger.info("Skipping directory creation for %s (outside root)", item.path)
                     continue
                 if not os.path.exists(full_path):
-                    print(f"Creating directory: {full_path}")
+                    logger.info("Creating directory: %s", full_path)
                     os.makedirs(full_path, exist_ok=True)
                 self.handled_paths.add(item.path)
 
-    def _move_files_by_hash(
-        self, missing: List[FlatFileItem], added: List[FlatFileItem]
-    ) -> None:
-        src_by_hash = {
-            i.hash: i for i in missing if not i.path.endswith("/") and i.hash
-        }
+    def _move_files_by_hash(self, missing: List[FlatFileItem], added: List[FlatFileItem]) -> None:
+        src_by_hash = {i.hash: i for i in missing if not i.path.endswith("/") and i.hash}
         dst_by_hash = {i.hash: i for i in added if not i.path.endswith("/") and i.hash}
 
         for file_hash, src_item in src_by_hash.items():
@@ -54,13 +50,13 @@ class DiskOperations:
             dst = self._to_abs(dst_item.path)
 
             if not self._is_safe(src) or not self._is_safe(dst):
-                print(
-                    f"Skipping move from '{src_item.path}' to '{dst_item.path}' (outside root)."
+                logger.info(
+                    "Skipping move from '%s' to '%s' (outside root).", src_item.path, dst_item.path
                 )
                 continue
 
             os.makedirs(os.path.dirname(dst), exist_ok=True)
-            print(f"Moving file: {src} -> {dst}")
+            logger.info("Moving file: %s -> %s", src, dst)
             shutil.move(src, dst)
             self.handled_paths.update({src_item.path, dst_item.path})
 
@@ -71,11 +67,11 @@ class DiskOperations:
 
             full = self._to_abs(item.path)
             if not self._is_safe(full):
-                print(f"Skipping delete of '{item.path}' (outside root).")
+                logger.info("Skipping delete of '%s'", item.path)
                 continue
 
             if os.path.exists(full):
-                print(f"Deleting file: {full}")
+                logger.info("Deleting file: %s", full)
                 os.remove(full)
                 self.handled_paths.add(item.path)
 
@@ -91,17 +87,15 @@ class DiskOperations:
                     break
                 current = parent
 
-        for dir_path in sorted(
-            dirs, key=lambda p: p.replace("\\", "/").count("/"), reverse=True
-        ):
+        for dir_path in sorted(dirs, key=lambda p: p.replace("\\", "/").count("/"), reverse=True):
             full = self._to_abs(dir_path)
             if not self._is_safe(full):
-                print(f"Skipping rmdir '{dir_path}' (outside root).")
+                logger.info("Skipping rmdir '%s' (outside root).", dir_path)
                 continue
             if os.path.isdir(full):
                 try:
                     os.rmdir(full)
-                    print(f"Removed empty dir: {full}")
+                    logger.info("Removed empty dir: %s", full)
                 except OSError:
                     pass  # Not empty
 
@@ -115,7 +109,7 @@ class DiskOperations:
     def create_snapshot(root_dir: str) -> Optional[List[FlatFileItem]]:
         """Creates a flat list of all files and empty directories."""
         if not os.path.isdir(root_dir):
-            print(f"Error: Directory '{root_dir}' does not exist.")
+            logger.error("Error: Directory '%s' does not exist.", root_dir)
             return None
 
         items: List[FlatFileItem] = []
