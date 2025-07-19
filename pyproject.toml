@@ -4,15 +4,14 @@ version = "0.1.0"
 description = "A LLM powered CLI utility to organize your files"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = [
-    "litellm>=1.73.6",
-    "pydantic>=2.11.7",
-    "typer>=0.16.0",
-]
+dependencies = ["litellm>=1.73.6", "pydantic>=2.11.7", "typer>=0.16.0"]
 
 [dependency-groups]
-dev = [
-    "mypy>=1.17.0",
-    "pytest>=8.4.1",
-    "ruff>=0.12.2",
-]
+dev = ["mypy>=1.17.0", "pyright>=1.1.403", "pytest>=8.4.1", "ruff>=0.12.2"]
+
+[tool.pyright]
+typeCheckingMode = "basic"
+
+[tool.mypy]
+check_untyped_defs = true
+disallow_incomplete_defs = true

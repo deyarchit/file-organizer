@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Field
 from typing import List, Optional
+
+from pydantic import BaseModel, Field
 
 
 class FlatFileItem(BaseModel):
@@ -9,7 +10,7 @@ class FlatFileItem(BaseModel):
     )
     hash: Optional[str] = Field(
         default=None,
-        description="MD5 or other hash of file contents. Present only for files.",
+        description="Hash of file contents. Present only for files.",
     )
     size: Optional[int] = Field(
         default=None, description="Size of the file in bytes. Present only for files."
@@ -17,9 +18,7 @@ class FlatFileItem(BaseModel):
 
 
 class OrganizationStrategy(BaseModel):
-    name: str = Field(
-        description="The organization strategy used for the items, e.g., 'by_name'."
-    )
+    name: str = Field(description="The organization strategy used for the items, e.g., 'by_name'.")
     items: List[FlatFileItem]
 
 
