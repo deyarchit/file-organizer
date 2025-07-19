@@ -19,10 +19,10 @@ class DiskOperations:
 
     def sync(self, current_items: List[FlatFileItem], desired_items: List[FlatFileItem]) -> None:
         """Apply changes to match the desired file structure."""
+
         missing, added = self.compare_structures(current_items, desired_items)
         self._create_directories(added)
         self._move_files_by_hash(missing, added)
-        self._delete_missing_files(missing)
         self._delete_empty_dirs(missing)
 
     def _create_directories(self, added: List[FlatFileItem]) -> None:
@@ -34,7 +34,11 @@ class DiskOperations:
                     continue
                 if not os.path.exists(full_path):
                     logger.info("Creating directory: %s", full_path)
-                    os.makedirs(full_path, exist_ok=True)
+                    try:
+                        os.makedirs(full_path, exist_ok=True)
+                    except NotADirectoryError as e:
+                        logger.error("Creating directory: %s", e)
+                        continue
                 self.handled_paths.add(item.path)
 
     def _move_files_by_hash(self, missing: List[FlatFileItem], added: List[FlatFileItem]) -> None:
@@ -97,7 +101,7 @@ class DiskOperations:
                     os.rmdir(full)
                     logger.info("Removed empty dir: %s", full)
                 except OSError:
-                    pass  # Not empty
+                    pass
 
     def _to_abs(self, rel_path: str) -> str:
         return os.path.join(self.root_dir, rel_path.replace("/", os.sep))
