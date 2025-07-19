@@ -18,7 +18,7 @@ class DiskOperations:
         self.handled_paths: Set[str] = set()
 
     def sync(self, current_items: List[FlatFileItem], desired_items: List[FlatFileItem]) -> None:
-        """Apply changes to match the desired file structure."""
+        """Apply changes to match the desired file structure while ignoring file deletes."""
 
         missing, added = self.compare_structures(current_items, desired_items)
         self._create_directories(added)
@@ -36,7 +36,7 @@ class DiskOperations:
                     logger.info("Creating directory: %s", full_path)
                     try:
                         os.makedirs(full_path, exist_ok=True)
-                    except NotADirectoryError as e:
+                    except (NotADirectoryError, FileExistsError) as e:
                         logger.error("Creating directory: %s", e)
                         continue
                 self.handled_paths.add(item.path)
