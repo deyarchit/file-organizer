@@ -25,12 +25,9 @@ def setup_logging(log_level="INFO"):
                 "stream": sys.stdout,
             },
         },
-        "loggers": {
-            "root": {
-                "handlers": ["console"],
-                "level": log_level,
-                "propagate": False,
-            },
+        "root": {
+            "handlers": ["console"],
+            "level": log_level,
         },
     }
     logging.config.dictConfig(LOGGING_CONFIG)
