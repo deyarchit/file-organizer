@@ -4,7 +4,7 @@ from typing import List
 import typer
 
 from organizer.disk_operations import DiskOperations
-from organizer.llm import LLMClient
+from organizer.llm import IntelligentFileOrganizer
 from organizer.models import FlatFileItem, LLMResponseSchema, OrganizationStrategy
 
 from .renderer import ConsoleRenderer, render_progress_task
@@ -16,7 +16,7 @@ class FileOrganizer:
     def __init__(
         self,
         root_path: str,
-        llm_client: LLMClient,
+        llm_client: IntelligentFileOrganizer,
         renderer: ConsoleRenderer | None = None,
     ):
         self.root_path = root_path
@@ -26,7 +26,7 @@ class FileOrganizer:
 
     @render_progress_task("Generating options...")
     def generate_options(self, current_structure: List[FlatFileItem]) -> LLMResponseSchema:
-        return self.llm_client.generate_options(current_structure, system_prompt)
+        return self.llm_client.generate_reorganization_strategies(current_structure)
 
     @render_progress_task("Validating options...")
     def validate_options(
@@ -82,19 +82,3 @@ class FileOrganizer:
 
         except Exception as e:
             logger.error("An error occurred: %s", e)
-
-
-system_prompt = """
-You are an expert file system organizer. Your task is to analyze the provided directory structure and propose up to three distinct, logical, and practical reorganization plans. Each plan should aim to improve clarity, accessibility, and reduce clutter.
-
-For each proposed plan, you must output a JSON object that adheres strictly to the defined `response_schema`.
-
-Your proposed plans could provide suggestions that:
-* **Group similar file types** (e.g., all `.csv` files, all `.xml` files).
-* **Consolidate files related to the same project or client**
-* **Reduce unnecessary nested subfolders.**
-* **You are encouraged to rename folders to improve organization but do not rename files.**
-
-
-Present your suggestions as a JSON array, where each element is one of your proposed organization strategy JSON object.
-    """
