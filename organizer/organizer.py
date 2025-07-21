@@ -38,7 +38,11 @@ def progress_task(description: str) -> Callable:
 
 
 class FileOrganizer:
-    def __init__(self, root_path: str, renderer: ConsoleRenderer | None = None):
+    def __init__(
+        self,
+        root_path: str,
+        renderer: ConsoleRenderer | None = None,
+    ):
         self.root_path = root_path
         self.disk_ops = DiskOperations(root_path)
         self.renderer = renderer if renderer is not None else ConsoleRenderer()
@@ -88,22 +92,7 @@ class FileOrganizer:
         return all_valid
 
     def select_strategy(self, proposed_structures: List[OrganizationStrategy]) -> int:
-        while True:
-            try:
-                selected = typer.prompt("Select the reorganization strategy no.", type=int)
-                if not 0 <= selected < len(proposed_structures):
-                    typer.secho(
-                        f"Invalid selection. Enter a number between 0 and {len(proposed_structures) - 1}.",
-                        fg=typer.colors.RED,
-                    )
-                    continue
-
-                typer.echo(f"You selected: {proposed_structures[selected].name}")
-                if typer.confirm("Are you sure you want to proceed?", abort=False):
-                    return selected
-
-            except ValueError:
-                typer.echo("Invalid input. Please enter a number.")
+        return self.renderer.select_strategy(proposed_structures)
 
     def apply_strategy(
         self,
@@ -131,6 +120,10 @@ class FileOrganizer:
 
             option = self.select_strategy(parsed_response.strategies)
             self.apply_strategy(current_structure, parsed_response.strategies[option].items)
+
+            current_structure = DiskOperations.create_snapshot(self.root_path)
+            if current_structure:
+                self.renderer.render_file_tree(current_structure)
 
         except Exception as e:
             logger.error("An error occurred: %s", e)

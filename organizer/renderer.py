@@ -1,9 +1,12 @@
-from typing import List, Dict, Any
-from .models import FlatFileItem, OrganizationStrategy
-from rich.tree import Tree
-from rich.table import Table
-from rich.console import Console
 import os
+from typing import Any, Dict, List
+
+import typer
+from rich.console import Console
+from rich.table import Table
+from rich.tree import Tree
+
+from .models import FlatFileItem, OrganizationStrategy
 
 
 class ConsoleRenderer:
@@ -51,12 +54,11 @@ class ConsoleRenderer:
         return tree
 
     def render_file_tree(self, items: List[FlatFileItem]) -> None:
+        self.console.print("\n[bold cyan]Current folder structure:[/bold cyan]")
         tree = self.generate_file_tree(items)
         self.console.print(tree)
 
-    def render_organization_strategy(
-        self, strategies: List[OrganizationStrategy]
-    ) -> None:
+    def render_organization_strategy(self, strategies: List[OrganizationStrategy]) -> None:
         table = Table(
             title="Organization Strategies",
             show_header=True,
@@ -67,8 +69,29 @@ class ConsoleRenderer:
         table.add_column("Strategy")
         table.add_column("Proposed Structure")
         for idx, strategy in enumerate(strategies):
-            table.add_row(
-                str(idx), strategy.name, self.generate_file_tree(strategy.items)
-            )
+            table.add_row(str(idx + 1), strategy.name, self.generate_file_tree(strategy.items))
 
         self.console.print(table)
+
+    def select_strategy(self, proposed_structures: List["OrganizationStrategy"]) -> int:
+        while True:
+            self.console.print("\n[bold cyan]Available Reorganization Strategies:[/bold cyan]")
+            for i, strategy in enumerate(proposed_structures, start=1):
+                self.console.print(f"[cyan]{i}.[/cyan] {strategy.name}")
+
+            selected_str = typer.prompt("Enter the number of the strategy you want to select")
+            if not selected_str.isdigit():
+                typer.secho("Invalid input. Please enter a number.", fg=typer.colors.RED)
+                continue
+
+            selected = int(selected_str) - 1
+            if not 0 <= selected < len(proposed_structures):
+                typer.secho(
+                    f"Invalid selection. Enter a number between 1 and {len(proposed_structures)}.",
+                    fg=typer.colors.RED,
+                )
+                continue
+
+            self.console.print(f"You selected: [bold]{proposed_structures[selected].name}[/bold]")
+            if typer.confirm("Are you sure you want to proceed?", abort=False):
+                return selected
