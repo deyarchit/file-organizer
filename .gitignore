@@ -13,3 +13,4 @@ wheels/
 .env
 .notes
 tests/data/integration
+.DS_Store
