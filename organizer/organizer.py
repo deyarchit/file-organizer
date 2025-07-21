@@ -1,79 +1,34 @@
 import logging
-from functools import wraps
-from typing import Callable, List, Union
+from typing import List
 
 import typer
-from litellm import CustomStreamWrapper, completion
-from litellm.types.utils import ModelResponse, StreamingChoices
-from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from organizer.disk_operations import DiskOperations
+from organizer.llm import LLMClient
 from organizer.models import FlatFileItem, LLMResponseSchema, OrganizationStrategy
 
-from .renderer import ConsoleRenderer
+from .renderer import ConsoleRenderer, render_progress_task
 
 logger = logging.getLogger(__name__)
-
-
-def progress_task(description: str) -> Callable:
-    """A decorator to show a progress spinner for a function call."""
-
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                transient=True,
-            ) as progress:
-                task_id = progress.add_task(description=description, total=None)
-                try:
-                    return func(*args, **kwargs)
-                finally:
-                    progress.remove_task(task_id)
-
-        return wrapper
-
-    return decorator
 
 
 class FileOrganizer:
     def __init__(
         self,
         root_path: str,
+        llm_client: LLMClient,
         renderer: ConsoleRenderer | None = None,
     ):
         self.root_path = root_path
+        self.llm_client = llm_client
         self.disk_ops = DiskOperations(root_path)
         self.renderer = renderer if renderer is not None else ConsoleRenderer()
 
-    @progress_task("Generating options...")
+    @render_progress_task("Generating options...")
     def generate_options(self, current_structure: List[FlatFileItem]) -> LLMResponseSchema:
-        response: Union[ModelResponse, CustomStreamWrapper] = completion(
-            model="gemini/gemini-2.5-flash",
-            response_format=LLMResponseSchema,
-            messages=[
-                {"content": system_prompt, "role": "system"},
-                {"content": str(current_structure), "role": "user"},
-            ],
-            temperature=0.0,
-        )
+        return self.llm_client.generate_options(current_structure, system_prompt)
 
-        if isinstance(response, CustomStreamWrapper):
-            raise TypeError("Expected Non-Streaming response but got streaming response")
-
-        if isinstance(response.choices[0], StreamingChoices):
-            raise TypeError("Expected Non-Streaming response but got streaming response")
-
-        content = response.choices[0].message.content
-        if content is None:
-            raise ValueError("LLM response content is None")
-
-        parsed_response: LLMResponseSchema = LLMResponseSchema.model_validate_json(content)
-
-        return parsed_response
-
-    @progress_task("Validating options...")
+    @render_progress_task("Validating options...")
     def validate_options(
         self,
         current_structure: List[FlatFileItem],
@@ -92,7 +47,7 @@ class FileOrganizer:
         return all_valid
 
     def select_strategy(self, proposed_structures: List[OrganizationStrategy]) -> int:
-        return self.renderer.select_strategy(proposed_structures)
+        return self.renderer.render_strategy_selection(proposed_structures)
 
     def apply_strategy(
         self,

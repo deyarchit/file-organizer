@@ -1,8 +1,10 @@
 import os
-from typing import Any, Dict, List
+from functools import wraps
+from typing import Any, Callable, Dict, List
 
 import typer
 from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 from rich.tree import Tree
 
@@ -73,7 +75,7 @@ class ConsoleRenderer:
 
         self.console.print(table)
 
-    def select_strategy(self, proposed_structures: List["OrganizationStrategy"]) -> int:
+    def render_strategy_selection(self, proposed_structures: List["OrganizationStrategy"]) -> int:
         while True:
             self.console.print("\n[bold cyan]Available Reorganization Strategies:[/bold cyan]")
             for i, strategy in enumerate(proposed_structures, start=1):
@@ -95,3 +97,25 @@ class ConsoleRenderer:
             self.console.print(f"You selected: [bold]{proposed_structures[selected].name}[/bold]")
             if typer.confirm("Are you sure you want to proceed?", abort=False):
                 return selected
+
+
+def render_progress_task(description: str) -> Callable:
+    """A decorator to show a progress spinner for a function call."""
+
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                transient=True,
+            ) as progress:
+                task_id = progress.add_task(description=description, total=None)
+                try:
+                    return func(*args, **kwargs)
+                finally:
+                    progress.remove_task(task_id)
+
+        return wrapper
+
+    return decorator

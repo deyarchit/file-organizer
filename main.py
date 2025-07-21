@@ -4,6 +4,7 @@ import typer
 from dotenv import load_dotenv
 from typing_extensions import Annotated
 
+from organizer.llm import LLMClient
 from organizer.organizer import FileOrganizer
 from utils.logging_config import setup_logging
 
@@ -20,7 +21,8 @@ def organize(
     if show_logs:
         setup_logging()
     logger.info("Starting organizer under path: %s", path)
-    organizer = FileOrganizer(path)
+    llm = LLMClient()
+    organizer = FileOrganizer(path, llm_client=llm)
     organizer.organize()
 
 
