@@ -1,16 +1,16 @@
 ## File Organizer
 
-A LLM powered file organizer to organize your files on disk.
+An LLM-powered file organizer that organizes your files on disk.
 
 ### Instructions
 
-This app currently only supports gemini, so export `GEMINI_API_KEY` to terminal and the run the app using `uv run main.py`.
+This app currently supports only Gemini. Export the `GEMINI_API_KEY` environment variable, then run the app using `uv run main.py`.
 
-```
+```bash
 uv run main.py <path_to_organize>
 ```
 
-*Note: This will directly make the file moves in the orginal directory. As part of the plan evaluation the app checks if any files were removed/added, if that is the case then the app will report that.*
+*Note: The tool performs file moves directly in the original directory. During plan evaluation, it detects and reports any files that were added or removed.*
 
 ### Demo
 
