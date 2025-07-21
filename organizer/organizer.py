@@ -1,75 +1,34 @@
 import logging
-from functools import wraps
-from typing import Callable, List, Union
+from typing import List
 
 import typer
-from litellm import CustomStreamWrapper, completion
-from litellm.types.utils import ModelResponse, StreamingChoices
-from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from organizer.disk_operations import DiskOperations
+from organizer.llm import IntelligentFileOrganizer
 from organizer.models import FlatFileItem, LLMResponseSchema, OrganizationStrategy
 
-from .renderer import ConsoleRenderer
+from .renderer import ConsoleRenderer, render_progress_task
 
 logger = logging.getLogger(__name__)
 
 
-def progress_task(description: str) -> Callable:
-    """A decorator to show a progress spinner for a function call."""
-
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                transient=True,
-            ) as progress:
-                task_id = progress.add_task(description=description, total=None)
-                try:
-                    return func(*args, **kwargs)
-                finally:
-                    progress.remove_task(task_id)
-
-        return wrapper
-
-    return decorator
-
-
 class FileOrganizer:
-    def __init__(self, root_path: str, renderer: ConsoleRenderer | None = None):
+    def __init__(
+        self,
+        root_path: str,
+        llm_client: IntelligentFileOrganizer,
+        renderer: ConsoleRenderer | None = None,
+    ):
         self.root_path = root_path
+        self.llm_client = llm_client
         self.disk_ops = DiskOperations(root_path)
         self.renderer = renderer if renderer is not None else ConsoleRenderer()
 
-    @progress_task("Generating options...")
+    @render_progress_task("Generating options...")
     def generate_options(self, current_structure: List[FlatFileItem]) -> LLMResponseSchema:
-        response: Union[ModelResponse, CustomStreamWrapper] = completion(
-            model="gemini/gemini-2.5-flash",
-            response_format=LLMResponseSchema,
-            messages=[
-                {"content": system_prompt, "role": "system"},
-                {"content": str(current_structure), "role": "user"},
-            ],
-            temperature=0.0,
-        )
+        return self.llm_client.generate_reorganization_strategies(current_structure)
 
-        if isinstance(response, CustomStreamWrapper):
-            raise TypeError("Expected Non-Streaming response but got streaming response")
-
-        if isinstance(response.choices[0], StreamingChoices):
-            raise TypeError("Expected Non-Streaming response but got streaming response")
-
-        content = response.choices[0].message.content
-        if content is None:
-            raise ValueError("LLM response content is None")
-
-        parsed_response: LLMResponseSchema = LLMResponseSchema.model_validate_json(content)
-
-        return parsed_response
-
-    @progress_task("Validating options...")
+    @render_progress_task("Validating options...")
     def validate_options(
         self,
         current_structure: List[FlatFileItem],
@@ -88,22 +47,7 @@ class FileOrganizer:
         return all_valid
 
     def select_strategy(self, proposed_structures: List[OrganizationStrategy]) -> int:
-        while True:
-            try:
-                selected = typer.prompt("Select the reorganization strategy no.", type=int)
-                if not 0 <= selected < len(proposed_structures):
-                    typer.secho(
-                        f"Invalid selection. Enter a number between 0 and {len(proposed_structures) - 1}.",
-                        fg=typer.colors.RED,
-                    )
-                    continue
-
-                typer.echo(f"You selected: {proposed_structures[selected].name}")
-                if typer.confirm("Are you sure you want to proceed?", abort=False):
-                    return selected
-
-            except ValueError:
-                typer.echo("Invalid input. Please enter a number.")
+        return self.renderer.render_strategy_selection(proposed_structures)
 
     def apply_strategy(
         self,
@@ -132,21 +76,9 @@ class FileOrganizer:
             option = self.select_strategy(parsed_response.strategies)
             self.apply_strategy(current_structure, parsed_response.strategies[option].items)
 
+            current_structure = DiskOperations.create_snapshot(self.root_path)
+            if current_structure:
+                self.renderer.render_file_tree(current_structure)
+
         except Exception as e:
             logger.error("An error occurred: %s", e)
-
-
-system_prompt = """
-You are an expert file system organizer. Your task is to analyze the provided directory structure and propose up to three distinct, logical, and practical reorganization plans. Each plan should aim to improve clarity, accessibility, and reduce clutter.
-
-For each proposed plan, you must output a JSON object that adheres strictly to the defined `response_schema`.
-
-Your proposed plans could provide suggestions that:
-* **Group similar file types** (e.g., all `.csv` files, all `.xml` files).
-* **Consolidate files related to the same project or client**
-* **Reduce unnecessary nested subfolders.**
-* **You are encouraged to rename folders to improve organization but do not rename files.**
-
-
-Present your suggestions as a JSON array, where each element is one of your proposed organization strategy JSON object.
-    """
