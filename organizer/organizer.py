@@ -12,7 +12,7 @@ from .renderer import ConsoleRenderer, render_progress_task
 logger = logging.getLogger(__name__)
 
 
-class FileOrganizer:
+class Organizer:
     def __init__(
         self,
         root_path: str,
@@ -46,9 +46,6 @@ class FileOrganizer:
                 all_valid = False
         return all_valid
 
-    def select_strategy(self, proposed_structures: List[OrganizationStrategy]) -> int:
-        return self.renderer.render_strategy_selection(proposed_structures)
-
     def apply_strategy(
         self,
         current_structure: List[FlatFileItem],
@@ -73,7 +70,7 @@ class FileOrganizer:
             else:
                 return
 
-            option = self.select_strategy(parsed_response.strategies)
+            option = self.renderer.render_strategy_selection(parsed_response.strategies)
             self.apply_strategy(current_structure, parsed_response.strategies[option].items)
 
             current_structure = DiskOperations.create_snapshot(self.root_path)
