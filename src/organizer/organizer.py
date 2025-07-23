@@ -3,16 +3,15 @@ from typing import List
 
 import typer
 
-from organizer.disk_operations import DiskOperations
-from organizer.llm import IntelligentFileOrganizer
-from organizer.models import FlatFileItem, LLMResponseSchema, OrganizationStrategy
-
+from .disk_operations import DiskOperations
+from .llm import IntelligentFileOrganizer
+from .models import FlatFileItem, LLMResponseSchema, OrganizationStrategy
 from .renderer import ConsoleRenderer, render_progress_task
 
 logger = logging.getLogger(__name__)
 
 
-class FileOrganizer:
+class Organizer:
     def __init__(
         self,
         root_path: str,
@@ -46,9 +45,6 @@ class FileOrganizer:
                 all_valid = False
         return all_valid
 
-    def select_strategy(self, proposed_structures: List[OrganizationStrategy]) -> int:
-        return self.renderer.render_strategy_selection(proposed_structures)
-
     def apply_strategy(
         self,
         current_structure: List[FlatFileItem],
@@ -57,28 +53,24 @@ class FileOrganizer:
         self.disk_ops.sync(current_structure, proposed_structure)
 
     def organize(self) -> None:
-        try:
-            current_structure: List[FlatFileItem] | None = DiskOperations.create_snapshot(
-                self.root_path
-            )
-            if current_structure:
-                self.renderer.render_file_tree(current_structure)
-            else:
-                typer.secho("No files found in the specified directory.", fg=typer.colors.YELLOW)
-                return
+        current_structure: List[FlatFileItem] | None = DiskOperations.create_snapshot(
+            self.root_path
+        )
+        if current_structure:
+            self.renderer.render_file_tree(current_structure)
+        else:
+            typer.secho("No files found in the specified directory.", fg=typer.colors.YELLOW)
+            return
 
-            parsed_response = self.generate_options(current_structure)
-            if self.validate_options(current_structure, parsed_response.strategies):
-                self.renderer.render_organization_strategy(parsed_response.strategies)
-            else:
-                return
+        parsed_response = self.generate_options(current_structure)
+        if self.validate_options(current_structure, parsed_response.strategies):
+            self.renderer.render_organization_strategy(parsed_response.strategies)
+        else:
+            return
 
-            option = self.select_strategy(parsed_response.strategies)
-            self.apply_strategy(current_structure, parsed_response.strategies[option].items)
+        option = self.renderer.render_strategy_selection(parsed_response.strategies)
+        self.apply_strategy(current_structure, parsed_response.strategies[option].items)
 
-            current_structure = DiskOperations.create_snapshot(self.root_path)
-            if current_structure:
-                self.renderer.render_file_tree(current_structure)
-
-        except Exception as e:
-            logger.error("An error occurred: %s", e)
+        current_structure = DiskOperations.create_snapshot(self.root_path)
+        if current_structure:
+            self.renderer.render_file_tree(current_structure)

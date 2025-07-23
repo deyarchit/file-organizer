@@ -2,14 +2,14 @@ import logging.config
 import sys
 
 
-def setup_logging(log_level="INFO"):
+def setup_logger(log_level="INFO"):
     """
     Sets up the logging configuration for the entire application.
     """
 
     LOGGING_CONFIG = {
         "version": 1,
-        "disable_existing_loggers": True,
+        "disable_existing_loggers": False,
         "formatters": {
             "standard": {"format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"},
             "detailed": {
