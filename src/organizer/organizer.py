@@ -3,10 +3,9 @@ from typing import List
 
 import typer
 
-from organizer.disk_operations import DiskOperations
-from organizer.llm import IntelligentFileOrganizer
-from organizer.models import FlatFileItem, LLMResponseSchema, OrganizationStrategy
-
+from .disk_operations import DiskOperations
+from .llm import IntelligentFileOrganizer
+from .models import FlatFileItem, LLMResponseSchema, OrganizationStrategy
 from .renderer import ConsoleRenderer, render_progress_task
 
 logger = logging.getLogger(__name__)

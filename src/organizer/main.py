@@ -4,9 +4,9 @@ import typer
 from dotenv import load_dotenv
 from typing_extensions import Annotated
 
-from organizer.llm import IntelligentFileOrganizer
-from organizer.organizer import Organizer
-from utils.logging_config import setup_logging
+from .llm import IntelligentFileOrganizer
+from .logging_config import setup_logging
+from .organizer import Organizer
 
 load_dotenv()
 app = typer.Typer()
