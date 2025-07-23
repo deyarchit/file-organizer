@@ -12,7 +12,7 @@ format:
 
 test:
 	@echo "Running tests..."
-	.venv/bin/python -m pytest
+	uv run pytest .
 
 generate-mock-test-data:
 	@echo "Generating mock test data..."
