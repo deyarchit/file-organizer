@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from typing_extensions import Annotated
 
 from .llm import IntelligentFileOrganizer
-from .logging_config import setup_logging
+from .logging_config import setup_logger
 from .organizer import Organizer
 
 load_dotenv()
@@ -26,8 +26,10 @@ def organize(
     show_logs: Annotated[bool, typer.Option(help="Enable/Disable logs")] = False,
 ) -> None:
     if show_logs:
-        setup_logging()
-        logger.info("Starting organizer under path: %s", path)
+        setup_logger()
+
+    logger.info("Starting organizer under path: %s", path)
+
     try:
         llm = IntelligentFileOrganizer(llm_model)
         organizer = Organizer(path, llm_client=llm)
