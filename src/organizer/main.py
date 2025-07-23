@@ -27,10 +27,15 @@ def organize(
 ) -> None:
     if show_logs:
         setup_logging()
-    logger.info("Starting organizer under path: %s", path)
-    llm = IntelligentFileOrganizer(llm_model)
-    organizer = Organizer(path, llm_client=llm)
-    organizer.organize()
+        logger.info("Starting organizer under path: %s", path)
+    try:
+        llm = IntelligentFileOrganizer(llm_model)
+        organizer = Organizer(path, llm_client=llm)
+        organizer.organize()
+    except Exception as e:
+        logger.error("Error organizing files: %s", e)
+        typer.secho(f"Error organizing files: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":

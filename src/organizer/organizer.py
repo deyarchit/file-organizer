@@ -53,28 +53,24 @@ class Organizer:
         self.disk_ops.sync(current_structure, proposed_structure)
 
     def organize(self) -> None:
-        try:
-            current_structure: List[FlatFileItem] | None = DiskOperations.create_snapshot(
-                self.root_path
-            )
-            if current_structure:
-                self.renderer.render_file_tree(current_structure)
-            else:
-                typer.secho("No files found in the specified directory.", fg=typer.colors.YELLOW)
-                return
+        current_structure: List[FlatFileItem] | None = DiskOperations.create_snapshot(
+            self.root_path
+        )
+        if current_structure:
+            self.renderer.render_file_tree(current_structure)
+        else:
+            typer.secho("No files found in the specified directory.", fg=typer.colors.YELLOW)
+            return
 
-            parsed_response = self.generate_options(current_structure)
-            if self.validate_options(current_structure, parsed_response.strategies):
-                self.renderer.render_organization_strategy(parsed_response.strategies)
-            else:
-                return
+        parsed_response = self.generate_options(current_structure)
+        if self.validate_options(current_structure, parsed_response.strategies):
+            self.renderer.render_organization_strategy(parsed_response.strategies)
+        else:
+            return
 
-            option = self.renderer.render_strategy_selection(parsed_response.strategies)
-            self.apply_strategy(current_structure, parsed_response.strategies[option].items)
+        option = self.renderer.render_strategy_selection(parsed_response.strategies)
+        self.apply_strategy(current_structure, parsed_response.strategies[option].items)
 
-            current_structure = DiskOperations.create_snapshot(self.root_path)
-            if current_structure:
-                self.renderer.render_file_tree(current_structure)
-
-        except Exception as e:
-            logger.error("An error occurred: %s", e)
+        current_structure = DiskOperations.create_snapshot(self.root_path)
+        if current_structure:
+            self.renderer.render_file_tree(current_structure)
