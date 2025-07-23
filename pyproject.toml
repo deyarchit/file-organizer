@@ -13,8 +13,8 @@ dependencies = ["litellm>=1.73.6", "pydantic>=2.11.7", "typer>=0.16.0"]
 [dependency-groups]
 dev = ["mypy>=1.17.0", "pyright>=1.1.403", "pytest>=8.4.1", "ruff>=0.12.2"]
 
-# [project.scripts]
-# "organize-files" = "organizer.main:app"
+[project.scripts]
+"organizer" = "organizer.main:app"
 
 [tool.pyright]
 typeCheckingMode = "basic"
